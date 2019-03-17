@@ -70,6 +70,6 @@ public class Message implements Serializable {
 	
 	@Override
 	public String toString() {
-		return getOid() + ": " + getTranscript();
+		return " (P" + getIndex() + "): " + getTranscript();
 	}
 }

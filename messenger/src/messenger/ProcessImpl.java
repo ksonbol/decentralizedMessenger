@@ -123,6 +123,19 @@ public class ProcessImpl implements Process {
 	}
 
 	/**
+	 * update process VC based on message VC
+	 * @param msgVC: Vector Clock of received message
+	 */
+	private void updateVC(int[] msgVC) {
+		for (int i=0; i<vc.length; i++) {
+			if (msgVC[i] > vc[i]) {
+				vc[i] = msgVC[i];
+			}
+		}
+		printVC();
+	}
+	
+	/**
 	 * increment vector clock
 	 */
 	private void incrementVC() {
@@ -133,11 +146,32 @@ public class ProcessImpl implements Process {
 	 * helper method to print vector clock
 	 */
 	private void printVC() {
+		System.out.print("Updated VC: [");
 		for (int e : getVC())
 			System.out.print(e + " ");
-		System.out.print("\n");
+		System.out.print("]\n");
+		printReady();
 	}
 
+	
+	/**
+	 * initialize the VC array to zeros
+	 * @param count: number of processes in the group
+	 */
+	private void initializeVC(int count) {
+		vc = new int[count];
+		for (int i=0; i<count; i++) {
+			vc[i] = 0;
+		}
+	}
+	
+	/**
+	 * print the ready for writing line to user
+	 */
+	protected void printReady() {
+		System.out.print(" (P" + getIndex() + "): ");
+	}
+	
 	/**
 	 * starts the process by reading the configuration file and starting listening
 	 * threads
@@ -157,7 +191,7 @@ public class ProcessImpl implements Process {
 				i++;
 			}
 			reader.close();
-			vc = new int[i]; // initialize vector clock to 0 for all processes
+			initializeVC(i);
 			System.out.println("Group has " + i + " members");
 			System.out.println("Initial vector clock");
 			printVC();
@@ -171,7 +205,7 @@ public class ProcessImpl implements Process {
 		listener = new Listener(this);
 		listener.start();
 		System.out.println("Enter a message to send to the group.");
-		System.out.print(getId() + ": ");
+		printReady();
 	}
 
 	/**
@@ -198,7 +232,7 @@ public class ProcessImpl implements Process {
 	}
 
 	private void send(Message msg, String pid) {
-		System.out.println("sending message");
+//		System.out.println("sending message to " + pid);
 		try {
 			Registry reg = LocateRegistry.getRegistry(Main.getIP(pid), Main.getPort(pid));
 			stub = (Process) reg.lookup("Process");
@@ -227,37 +261,42 @@ public class ProcessImpl implements Process {
 			boolean toRemove = true;
 			if (msg.getVC()[senderInd] == (getVC()[senderInd] + 1)) {
 				for (int j = 0; j < getVC().length; j++) {
-					if (msg.getVC()[j] > getVC()[j])
+					if (msg.getVC()[j] > getVC()[j]) {
 						toRemove = false;
 						break;
+					}
 				}
 				if (toRemove) {
-					System.out.println("\n" + msg.toString());
-					System.out.print(getId() + ": ");
-					setVC(msg.getVC());
+					deliverMsg(msg);
 					messageQueue.remove(i);
 				}
 			}
 		}
 	}
 
+	private void deliverMsg(Message msg) {
+		System.out.println("\n" + msg.toString());
+		printReady();
+		updateVC(msg.getVC());
+	}
+	
 	@Override
 	public void messagePost(Message msg) throws RemoteException {
 		int senderInd = msg.getIndex();
-		if (msg.getVC()[senderInd] == (getVC()[senderInd] + 1)) {
-			for (int i = 0; i < getVC().length; i++) {
-				if (msg.getVC()[i] > getVC()[i]) {
-					System.out.println("queue update");
-					messageQueue.add(msg);
-					return;
-				}
+		if (msg.getVC()[senderInd] != (getVC()[senderInd] + 1)) {
+			messageQueue.add(msg);
+			return;
+		}
+		for (int i = 0; i < getVC().length; i++) {
+			if ((i != senderInd) && (msg.getVC()[i] > getVC()[i])) {
+				System.out.println("queue update");
+				messageQueue.add(msg);
+				return;
 			}
-			System.out.println("\n" + msg.toString());
-			System.out.print(getId() + ": ");
-			setVC(msg.getVC());
-			if (!messageQueue.isEmpty()) {
-				releaseQueue();
-			}
+		}
+		deliverMsg(msg);
+		if (!messageQueue.isEmpty()) {
+			releaseQueue();
 		}
 	}
 }
@@ -303,7 +342,7 @@ class Listener implements Runnable {
 	public void run() {
 		while (true) {
 			msg = sc.nextLine().trim();
-			System.out.print(process.getId() + ": ");
+			process.printReady();
 			if (!msg.isEmpty()) {
 				Message msgObj = process.createMessage(msg, false);
 				process.multicast(msgObj);
