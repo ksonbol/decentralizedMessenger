@@ -7,7 +7,6 @@ import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
-import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
 import java.util.Random;
 import java.util.Scanner;
@@ -231,6 +230,11 @@ public class ProcessImpl implements Process {
 		return msgObj;
 	}
 
+	/**
+	 * send message to process with ID = pid. This is achieved by RMI.
+	 * @param msg: Message object to be sent.
+	 * @param pid: id of receiver process
+	 */
 	private void send(Message msg, String pid) {
 //		System.out.println("sending message to " + pid);
 		try {
@@ -244,6 +248,10 @@ public class ProcessImpl implements Process {
 		}
 	}
 
+	/**
+	 * send message to all other processes in the group, using RMI
+	 * @param msg
+	 */
 	protected void multicast(Message msg) {
 		for (int i = 0; i < processes.size(); i++) {
 			if (i != getIndex()) {
@@ -252,6 +260,9 @@ public class ProcessImpl implements Process {
 		}
 	}
 
+	/**
+	 * Check all messages in the queue, deliver any that satisfy the causal-ordering requirement
+	 */
 	private void releaseQueue() {
 		System.out.println("queue release");
 		Message msg = null;
@@ -274,12 +285,21 @@ public class ProcessImpl implements Process {
 		}
 	}
 
+	/**
+	 * display message to the user
+	 * @param msg: Message object
+	 */
 	private void deliverMsg(Message msg) {
 		System.out.println("\n" + msg.toString());
 		printReady();
 		updateVC(msg.getVC());
 	}
 	
+	/**
+	 * This method is used by remote processes on Process stubs using RMI. It delivers a message
+	 * to the user if it satisfies the causality requirements. Otherwise, it adds the message to
+	 * the queue.
+	 */
 	@Override
 	public void messagePost(Message msg) throws RemoteException {
 		int senderInd = msg.getIndex();
@@ -334,10 +354,16 @@ class Listener implements Runnable {
 		sc = new Scanner(System.in);
 	}
 
+	/**
+	 * start associated thread
+	 */
 	public void start() {
 		th.start();
 	}
 
+	/**
+	 * infinitely waits for user input, creates a message and delivers it on user input
+	 */
 	@Override
 	public void run() {
 		while (true) {
