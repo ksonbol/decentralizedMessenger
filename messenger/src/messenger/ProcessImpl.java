@@ -7,12 +7,13 @@ import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
+import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
 import java.util.Scanner;
 
 /**
  * The process class has list of neighbors and has functionality for sending and 
- * receiving messages using RMI
+ * receiving messages using RMI	
  * @author karim
  *
  */
@@ -46,15 +47,6 @@ public class ProcessImpl implements Process {
 	 */
 	private Process stub;
 	
-	/**
-	 * Stub this process is exporting to other processes
-	 */
-	private static ProcessImpl exportedStub;
-	
-	/**
-	 * Local registry used for exporting objects
-	 */
-	private Registry localReg;
 	
 	/**
 	 * Creates the process instance, setting its id
@@ -209,7 +201,7 @@ class Listener implements Runnable {
 	private Thread th;
 	
 	/**
-	 * Scanner object tha reads user messages
+	 * Scanner object that reads user messages
 	 */
 	private Scanner sc;
 	

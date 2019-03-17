@@ -31,6 +31,7 @@ public class Main {
 			System.out.println("Usage: java Main IP/PORT_NUMBER");
 			System.exit(0);
 		}
+		System.setProperty("java.rmi.server.hostname", "localhost");
 		String id = args[0];
 		try {
 			System.out.println("Initializing process...");
