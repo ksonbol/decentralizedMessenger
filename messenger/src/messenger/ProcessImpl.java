@@ -220,26 +220,23 @@ public class ProcessImpl implements Process {
 
 	private void releaseQueue() {
 		System.out.println("queue release");
-		for (Message msg : messageQueue) {
+		Message msg = null;
+		for (int i=0; i<messageQueue.size(); i++) {
+			msg = messageQueue.get(i);
 			int senderInd = msg.getIndex();
-			int toRemove = -1;
+			boolean toRemove = true;
 			if (msg.getVC()[senderInd] == (getVC()[senderInd] + 1)) {
-				for (int i = 0; i < getVC().length; i++) {
-					if (msg.getVC()[i] <= getVC()[i]) {
-						System.out.println("\n" + msg.toString());
-						System.out.print(getId() + ": ");
-						setVC(msg.getVC());
-						toRemove = messageQueue.indexOf(msg);
+				for (int j = 0; j < getVC().length; j++) {
+					if (msg.getVC()[j] > getVC()[j])
+						toRemove = false;
 						break;
-					}
 				}
-			}
-			if (toRemove != -1) {
-				messageQueue.remove(toRemove);
-				if (!messageQueue.isEmpty()) {
-					releaseQueue();
+				if (toRemove) {
+					System.out.println("\n" + msg.toString());
+					System.out.print(getId() + ": ");
+					setVC(msg.getVC());
+					messageQueue.remove(i);
 				}
-				break;
 			}
 		}
 	}
@@ -249,18 +246,18 @@ public class ProcessImpl implements Process {
 		int senderInd = msg.getIndex();
 		if (msg.getVC()[senderInd] == (getVC()[senderInd] + 1)) {
 			for (int i = 0; i < getVC().length; i++) {
-				if (msg.getVC()[i] <= getVC()[i]) {
-					System.out.println("\n" + msg.toString());
-					System.out.print(getId() + ": ");
-					setVC(msg.getVC());
-					if (!messageQueue.isEmpty()) {
-						releaseQueue();
-					}
+				if (msg.getVC()[i] > getVC()[i]) {
+					System.out.println("queue update");
+					messageQueue.add(msg);
+					return;
 				}
 			}
-		} else {
-			System.out.println("queue update");
-			messageQueue.add(msg);
+			System.out.println("\n" + msg.toString());
+			System.out.print(getId() + ": ");
+			setVC(msg.getVC());
+			if (!messageQueue.isEmpty()) {
+				releaseQueue();
+			}
 		}
 	}
 }
