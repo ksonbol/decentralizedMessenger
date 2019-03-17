@@ -3,12 +3,11 @@ package messenger;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
-import java.rmi.AlreadyBoundException;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
-import java.rmi.server.UnicastRemoteObject;
+import java.util.ArrayList;
 import java.util.Scanner;
 
 /**
@@ -26,7 +25,7 @@ public class ProcessImpl implements Process {
 	/**
 	 * list of other process IDs
 	 */
-	private String[] processes;
+	private ArrayList<String> processes;
 	
 	/**
 	 * index of the process in the process list. This is consistent across all processes
@@ -50,7 +49,7 @@ public class ProcessImpl implements Process {
 	/**
 	 * Stub this process is exporting to other processes
 	 */
-	private Process exportedStub;
+	private static ProcessImpl exportedStub;
 	
 	/**
 	 * Local registry used for exporting objects
@@ -61,14 +60,21 @@ public class ProcessImpl implements Process {
 	 * Creates the process instance, setting its id
 	 * @param id of process as IP/Port number
 	 */
+	
+	/**
+	 * Listener objects that listens to user input
+	 */
+	private Listener listener;
+	
 	public ProcessImpl(String id) {
 		this.id = id;
+		this.processes = new ArrayList<String>();
 	}
 	
 	/**
 	 * @return the neighbors
 	 */
-	public String[] getProcesses() {
+	public ArrayList<String> getProcesses() {
 		return processes;
 	}
 
@@ -91,14 +97,6 @@ public class ProcessImpl implements Process {
 	 */
 	private void setIndex(int index) {
 		this.index = index;
-	}
-	
-	public String getIP() {
-		return id.split("/")[0];
-	}
-	
-	public int getPort() {
-		return Integer.parseInt(id.split("/")[1]);
 	}
 
 	/**
@@ -124,13 +122,14 @@ public class ProcessImpl implements Process {
 	private void printVC() {
 		for (int e: getVC())
 			System.out.print(e + " ");
+		System.out.print("\n");
 	}
 	
 	/**
 	 * starts the process by reading the configuration file and starting listening threads
 	 */
 	public void start() {
-		System.out.println("Starting process..");
+		System.out.println("Reading configuration file...");
 		try {
 			BufferedReader reader = new BufferedReader(new FileReader(file));
 			String line = null;
@@ -139,26 +138,25 @@ public class ProcessImpl implements Process {
 				if (line.trim().equals(getId())) {
 					setIndex(i);
 				}
-				System.out.println(line);
-				processes[i] = line.trim();
+//				System.out.println(line);
+				processes.add(line);
 				i++;
 			}
 			reader.close();
 			vc = new int[i]; // initialize vector clock to 0 for all processes
 			System.out.println("Group has " + i + " members");
 			System.out.println("Initial vector clock");
+			printVC();
 		} catch (IOException e) {
 			System.out.println("Could not start. Check configuration file.");
+			e.printStackTrace();
 			System.exit(0);
 		}
-		try {
-			exportedStub = (Process) UnicastRemoteObject.exportObject(this, getPort());
-			localReg = LocateRegistry.getRegistry(getPort());
-			localReg.bind("Process", exportedStub);
-		} catch (RemoteException | AlreadyBoundException e) {
-			System.out.println("Failed to export object with RMI");
-			System.exit(0);
-		}
+		System.out.println("Starting listening thread..");
+		listener = new Listener(this);
+		listener.start();
+		System.out.println("Enter a message to send to the group.");
+		System.out.print(getId() + ": ");
 	}
 	
 	/**
@@ -172,24 +170,30 @@ public class ProcessImpl implements Process {
 		return msgObj;
 	}
 	
-	protected void send(Message msg) {
-		for (int i=0; i<processes.length; i++) {
+	private void send(Message msg, String pid) {
+		try {
+			Registry reg = LocateRegistry.getRegistry(Main.getIP(pid), Main.getPort(pid));
+			stub = (Process) reg.lookup("Process");
+			stub.messagePost(msg);
+		} catch (RemoteException | NotBoundException e) {
+			System.out.println("Failed to do RMI with " + pid);
+			e.printStackTrace();
+			System.exit(0);
+		}
+	}
+	
+	protected void multicast(Message msg) {
+		for (int i=0; i<processes.size(); i++) {
 			if (i != getIndex()) {
-				try {
-					Registry reg = LocateRegistry.getRegistry(getIP(), getPort());
-					stub = (Process) reg.lookup("Process");
-					stub.messagePost(msg);
-				} catch (RemoteException | NotBoundException e) {
-					System.out.println("Failed to do RMI with " + processes[i]);
-					System.exit(0);
-				}
+				send(msg, processes.get(i));
 			}
 		}
 	}
 
 	@Override
 	public void messagePost(Message msg) throws RemoteException {
-		System.out.println(msg.toString());
+		System.out.println("\n" + msg.toString());
+		System.out.print(getId() + ": ");
 	}
 }
 
@@ -233,9 +237,10 @@ class Listener implements Runnable {
 	public void run() {
 		while(true) {
 			msg = sc.nextLine().trim();
+			System.out.print(process.getId() + ": ");
 			if (!msg.isEmpty()) {
 				Message msgObj = process.createMessage(msg);
-				process.send(msgObj);
+				process.multicast(msgObj);
 			}
 			try {
 				Thread.sleep(50);

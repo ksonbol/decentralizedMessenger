@@ -1,9 +1,0 @@
-/**
- * 
- */
-/**
- * @author karim
- *
- */
-module messenger {
-}
