@@ -9,11 +9,13 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
+import java.util.Random;
 import java.util.Scanner;
 
 /**
- * The process class has list of neighbors and has functionality for sending and 
- * receiving messages using RMI	
+ * The process class has list of neighbors and has functionality for sending and
+ * receiving messages using RMI
+ * 
  * @author karim
  *
  */
@@ -22,47 +24,58 @@ public class ProcessImpl implements Process {
 	 * Process ID string formatted as IP/PORT_NUMBER
 	 */
 	private String id;
-	
+
 	/**
 	 * list of other process IDs
 	 */
 	private ArrayList<String> processes;
-	
+
 	/**
-	 * index of the process in the process list. This is consistent across all processes
+	 * list of messages in the queue to be displayed (for causal ordering)
+	 */
+	private ArrayList<Message> messageQueue;
+
+	/**
+	 * index of the process in the process list. This is consistent across all
+	 * processes
 	 */
 	private int index;
 	/**
 	 * location and name of group configuration file
 	 */
 	private String file = "peers.txt";
-	
+
 	/**
 	 * Vector Clock of all processes in group
 	 */
 	private int[] vc;
-	
+
+	/**
+	 * Vector Clock for testing (temporary)
+	 */
+	private int[] vc_temp;
+
 	/**
 	 * Process stub object for RMI operations
 	 */
 	private Process stub;
-	
-	
+
 	/**
 	 * Creates the process instance, setting its id
+	 * 
 	 * @param id of process as IP/Port number
 	 */
-	
+
 	/**
 	 * Listener objects that listens to user input
 	 */
 	private Listener listener;
-	
+
 	public ProcessImpl(String id) {
 		this.id = id;
 		this.processes = new ArrayList<String>();
 	}
-	
+
 	/**
 	 * @return the neighbors
 	 */
@@ -101,24 +114,33 @@ public class ProcessImpl implements Process {
 
 	/**
 	 * set vector clock to vc
+	 * 
 	 * @param vc: given vector clock
 	 */
 	private void setVC(int[] vc) {
 		this.vc = vc;
+		printVC();
 	}
-	
+
+	/**
+	 * increment vector clock
+	 */
+	private void incrementVC() {
+		this.vc[index] = this.vc[index] + 1;
+	}
 
 	/**
 	 * helper method to print vector clock
 	 */
 	private void printVC() {
-		for (int e: getVC())
+		for (int e : getVC())
 			System.out.print(e + " ");
 		System.out.print("\n");
 	}
-	
+
 	/**
-	 * starts the process by reading the configuration file and starting listening threads
+	 * starts the process by reading the configuration file and starting listening
+	 * threads
 	 */
 	public void start() {
 		System.out.println("Reading configuration file...");
@@ -144,25 +166,39 @@ public class ProcessImpl implements Process {
 			e.printStackTrace();
 			System.exit(0);
 		}
+		messageQueue = new ArrayList<Message>();
 		System.out.println("Starting listening thread..");
 		listener = new Listener(this);
 		listener.start();
 		System.out.println("Enter a message to send to the group.");
 		System.out.print(getId() + ": ");
 	}
-	
+
 	/**
-	 * Create a new message object using the given transcript, attach sender id, and updated
-	 * vector clock
+	 * Create a new message object using the given transcript, attach sender id, and
+	 * updated vector clock
+	 * 
 	 * @param msg: transcript of the message
 	 * @return the message object
 	 */
-	protected Message createMessage(String msg) {
-		Message msgObj = new Message(msg, getId(), getVC());
+	protected Message createMessage(String msg, boolean randomize) {
+		
+		//use only for testing (testing vector clock cusal ordering) purposes
+		if (randomize) {
+			vc_temp = vc;
+			int inc = new Random().nextInt(4)-2;
+			vc_temp[getIndex()] = vc_temp[getIndex()]+inc;
+			setVC(vc_temp);
+		} 
+		
+		incrementVC();
+		//printVC();
+		Message msgObj = new Message(msg, getId(), getVC(), getIndex());
 		return msgObj;
 	}
-	
+
 	private void send(Message msg, String pid) {
+		System.out.println("sending message");
 		try {
 			Registry reg = LocateRegistry.getRegistry(Main.getIP(pid), Main.getPort(pid));
 			stub = (Process) reg.lookup("Process");
@@ -173,19 +209,59 @@ public class ProcessImpl implements Process {
 			System.exit(0);
 		}
 	}
-	
+
 	protected void multicast(Message msg) {
-		for (int i=0; i<processes.size(); i++) {
+		for (int i = 0; i < processes.size(); i++) {
 			if (i != getIndex()) {
 				send(msg, processes.get(i));
 			}
 		}
 	}
 
+	private void releaseQueue() {
+		System.out.println("queue release");
+		for (Message msg : messageQueue) {
+			int senderInd = msg.getIndex();
+			int toRemove = -1;
+			if (msg.getVC()[senderInd] == (getVC()[senderInd] + 1)) {
+				for (int i = 0; i < getVC().length; i++) {
+					if (msg.getVC()[i] <= getVC()[i]) {
+						System.out.println("\n" + msg.toString());
+						System.out.print(getId() + ": ");
+						setVC(msg.getVC());
+						toRemove = messageQueue.indexOf(msg);
+						break;
+					}
+				}
+			}
+			if (toRemove != -1) {
+				messageQueue.remove(toRemove);
+				if (!messageQueue.isEmpty()) {
+					releaseQueue();
+				}
+				break;
+			}
+		}
+	}
+
 	@Override
 	public void messagePost(Message msg) throws RemoteException {
-		System.out.println("\n" + msg.toString());
-		System.out.print(getId() + ": ");
+		int senderInd = msg.getIndex();
+		if (msg.getVC()[senderInd] == (getVC()[senderInd] + 1)) {
+			for (int i = 0; i < getVC().length; i++) {
+				if (msg.getVC()[i] <= getVC()[i]) {
+					System.out.println("\n" + msg.toString());
+					System.out.print(getId() + ": ");
+					setVC(msg.getVC());
+					if (!messageQueue.isEmpty()) {
+						releaseQueue();
+					}
+				}
+			}
+		} else {
+			System.out.println("queue update");
+			messageQueue.add(msg);
+		}
 	}
 }
 
@@ -194,44 +270,45 @@ class Listener implements Runnable {
 	 * Corresponding process object
 	 */
 	private ProcessImpl process;
-	
+
 	/**
 	 * Thread object that will listen to user messages
 	 */
 	private Thread th;
-	
+
 	/**
 	 * Scanner object that reads user messages
 	 */
 	private Scanner sc;
-	
+
 	/**
 	 * msg entered by user
 	 */
 	private String msg;
-	
+
 	/**
 	 * Constructor, stores the process object and creates a new thread
+	 * 
 	 * @param process
 	 */
-	
+
 	public Listener(ProcessImpl process) {
 		this.process = process;
 		th = new Thread(this);
 		sc = new Scanner(System.in);
 	}
-	
+
 	public void start() {
 		th.start();
 	}
-	
+
 	@Override
 	public void run() {
-		while(true) {
+		while (true) {
 			msg = sc.nextLine().trim();
 			System.out.print(process.getId() + ": ");
 			if (!msg.isEmpty()) {
-				Message msgObj = process.createMessage(msg);
+				Message msgObj = process.createMessage(msg, false);
 				process.multicast(msgObj);
 			}
 			try {

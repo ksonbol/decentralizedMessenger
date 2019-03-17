@@ -9,9 +9,14 @@ public class Message implements Serializable {
 	private String transcript;
 	
 	/**
-	 * the original sender id
+	 * the original sender id (IP and port number)
 	 */
 	private String oid;
+	
+	/**
+	 * the original sender index (in the list of nodes)
+	 */
+	private int index;
 	
 	/**
 	 * Vector Clock of all processes in group
@@ -24,10 +29,11 @@ public class Message implements Serializable {
 	 * @param transcript a string containing the content of the message
 	 * @param oid the original sender id
 	 */
-	public Message(String transcript, String oid, int[] vc) {
+	public Message(String transcript, String oid, int[] vc, int index) {
 		this.transcript = transcript;
 		this.oid = oid;
 		this.vc = vc;
+		this.index = index;
 	}
 	
 	/**
@@ -40,10 +46,18 @@ public class Message implements Serializable {
 	
 	/**
 	 * getter for oid
-	 * @return original sender id
+	 * @return original sender id (IP and port number)
 	 */
 	public String getOid() {
 		return oid;
+	}
+	
+	/**
+	 * getter for index
+	 * @return original sender index
+	 */
+	public int getIndex() {
+		return index;
 	}
 	
 	/**
