@@ -11,7 +11,7 @@ public class Main {
 			System.out.println("Usage java Main ID/PORT_NUMBER");
 		}
 		String id = args[0];
-		Process p = new Process(id);
+		ProcessImpl p = new ProcessImpl(id);
 		p.start();
 	}
 

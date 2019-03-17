@@ -51,4 +51,9 @@ public class Message {
 	public int[] getVC() {
 		return vc;
 	}
+	
+	@Override
+	public String toString() {
+		return getOid() + ": " + getTranscript();
+	}
 }
