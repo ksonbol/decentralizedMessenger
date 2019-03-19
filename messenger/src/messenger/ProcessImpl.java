@@ -8,14 +8,13 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.util.ArrayList;
-import java.util.Random;
 import java.util.Scanner;
 
 /**
  * The process class has list of neighbors and has functionality for sending and
  * receiving messages using RMI
  * 
- * @author karim
+ * @author Karim, Ilyas
  *
  */
 public class ProcessImpl implements Process {
@@ -48,11 +47,6 @@ public class ProcessImpl implements Process {
 	 * Vector Clock of all processes in group
 	 */
 	private int[] vc;
-
-	/**
-	 * Vector Clock for testing (temporary)
-	 */
-	private int[] vc_temp;
 
 	/**
 	 * Process stub object for RMI operations
@@ -112,26 +106,22 @@ public class ProcessImpl implements Process {
 	}
 
 	/**
-	 * set vector clock to vc
 	 * 
-	 * @param vc: given vector clock
+	 * @return stored vector clock as a String
 	 */
-	private void setVC(int[] vc) {
-		this.vc = vc;
-		printVC();
+	public String getVCString() {
+		return getVCString(getVC());
 	}
 
 	/**
-	 * update process VC based on message VC
-	 * @param msgVC: Vector Clock of received message
+	 * 
+	 * @return a given vector clock as a String
 	 */
-	private void updateVC(int[] msgVC) {
-		for (int i=0; i<vc.length; i++) {
-			if (msgVC[i] > vc[i]) {
-				vc[i] = msgVC[i];
-			}
-		}
-		printVC();
+	public String getVCString(int[] vc) {
+		String res = "[";
+		for (int e : vc)
+			res += e + " ";
+		return res.substring(0, res.length()-1) + "]";
 	}
 	
 	/**
@@ -145,10 +135,8 @@ public class ProcessImpl implements Process {
 	 * helper method to print vector clock
 	 */
 	private void printVC() {
-		System.out.print("Updated VC: [");
-		for (int e : getVC())
-			System.out.print(e + " ");
-		System.out.print("]\n");
+		System.out.print("Updated VC: ");
+		System.out.println(getVCString());
 		printReady();
 	}
 
@@ -184,8 +172,8 @@ public class ProcessImpl implements Process {
 			while ((line = reader.readLine()) != null) {
 				if (line.trim().equals(getId())) {
 					setIndex(i);
+					System.out.println("My index is: " + i);
 				}
-//				System.out.println(line);
 				processes.add(line);
 				i++;
 			}
@@ -214,18 +202,9 @@ public class ProcessImpl implements Process {
 	 * @param msg: transcript of the message
 	 * @return the message object
 	 */
-	protected Message createMessage(String msg, boolean randomize) {
-		
-		//use only for testing (testing vector clock cusal ordering) purposes
-		if (randomize) {
-			vc_temp = vc;
-			int inc = new Random().nextInt(4)-2;
-			vc_temp[getIndex()] = vc_temp[getIndex()]+inc;
-			setVC(vc_temp);
-		} 
-		
+	protected Message createMessage(String msg) {
 		incrementVC();
-		//printVC();
+		printVC();
 		Message msgObj = new Message(msg, getId(), getVC(), getIndex());
 		return msgObj;
 	}
@@ -254,8 +233,12 @@ public class ProcessImpl implements Process {
 	 */
 	protected void multicast(Message msg) {
 		for (int i = 0; i < processes.size(); i++) {
-			if (i != getIndex()) {
+			if (i != getIndex() && !processes.get(i).contains(getId())) {
 				send(msg, processes.get(i));
+				// USE FOR TESTING causality
+//				if (getIndex() == 0) {
+//					try { Thread.sleep(5000); } catch (InterruptedException e) {}
+//				 }
 			}
 		}
 	}
@@ -264,15 +247,17 @@ public class ProcessImpl implements Process {
 	 * Check all messages in the queue, deliver any that satisfy the causal-ordering requirement
 	 */
 	private void releaseQueue() {
-		System.out.println("queue release");
+		System.out.println("queue release " + messageQueue.size());
+		printVC();
 		Message msg = null;
+		boolean removedAny = false;
 		for (int i=0; i<messageQueue.size(); i++) {
 			msg = messageQueue.get(i);
 			int senderInd = msg.getIndex();
 			boolean toRemove = true;
 			if (msg.getVC()[senderInd] == (getVC()[senderInd] + 1)) {
 				for (int j = 0; j < getVC().length; j++) {
-					if (msg.getVC()[j] > getVC()[j]) {
+					if ((j != senderInd) && (msg.getVC()[j] > getVC()[j])) {
 						toRemove = false;
 						break;
 					}
@@ -280,8 +265,12 @@ public class ProcessImpl implements Process {
 				if (toRemove) {
 					deliverMsg(msg);
 					messageQueue.remove(i);
+					removedAny = true;
 				}
 			}
+		}
+		if (removedAny && !messageQueue.isEmpty()) {
+			releaseQueue(); // other messages may be deliverable now
 		}
 	}
 
@@ -292,7 +281,7 @@ public class ProcessImpl implements Process {
 	private void deliverMsg(Message msg) {
 		System.out.println("\n" + msg.toString());
 		printReady();
-		updateVC(msg.getVC());
+		vc[msg.getIndex()] += 1;
 	}
 	
 	/**
@@ -309,7 +298,7 @@ public class ProcessImpl implements Process {
 		}
 		for (int i = 0; i < getVC().length; i++) {
 			if ((i != senderInd) && (msg.getVC()[i] > getVC()[i])) {
-				System.out.println("queue update");
+				System.out.println("message: " + msg.toString() + " added to queue");
 				messageQueue.add(msg);
 				return;
 			}
@@ -370,7 +359,7 @@ class Listener implements Runnable {
 			msg = sc.nextLine().trim();
 			process.printReady();
 			if (!msg.isEmpty()) {
-				Message msgObj = process.createMessage(msg, false);
+				Message msgObj = process.createMessage(msg);
 				process.multicast(msgObj);
 			}
 			try {

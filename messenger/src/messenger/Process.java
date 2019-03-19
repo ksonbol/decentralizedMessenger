@@ -5,7 +5,7 @@ import java.rmi.RemoteException;
 
 /**
  * The interface to be used as stubs by remote processes.
- * @author karim
+ * @author Karim, Ilyas
  *
  */
 public interface Process extends Remote {

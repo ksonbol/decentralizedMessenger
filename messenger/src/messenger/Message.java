@@ -32,7 +32,7 @@ public class Message implements Serializable {
 	public Message(String transcript, String oid, int[] vc, int index) {
 		this.transcript = transcript;
 		this.oid = oid;
-		this.vc = vc;
+		this.vc = vc.clone();
 		this.index = index;
 	}
 	
@@ -68,8 +68,16 @@ public class Message implements Serializable {
 		return vc;
 	}
 	
+	private String vcToString() {
+		String vc_s = "VC = [ ";
+		for (int e: vc)
+			vc_s += e + " ";
+		vc_s += "]";
+		return vc_s;
+	}
+	
 	@Override
 	public String toString() {
-		return " (P" + getIndex() + "): " + getTranscript();
+		return " (P" + getIndex() + "): " + getTranscript() + ", " + vcToString();
 	}
 }
